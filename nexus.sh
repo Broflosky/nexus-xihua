@@ -3,7 +3,7 @@ set -e
 
 BASE_CONTAINER_NAME="nexus-node"
 IMAGE_NAME="nexus-node:latest"
-LOG_DIR="/root/nexus_logs"
+LOG_DIR="$HOME/nexus_logs"
 
 # 检查并安装 Node.js 和 pm2
 function check_node_pm2() {
@@ -45,7 +45,7 @@ function build_image() {
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PROVER_ID_FILE=/root/.nexus/node-id
+ENV PROVER_ID_FILE=$HOME/.nexus/node-id
 
 RUN apt-get update && apt-get install -y \
     curl \
@@ -55,7 +55,7 @@ RUN apt-get update && apt-get install -y \
 
 # 自动下载安装最新版 nexus-network
 RUN curl -sSL https://cli.nexus.xyz/ | NONINTERACTIVE=1 sh \
-    && ln -sf /root/.nexus/bin/nexus-network /usr/local/bin/nexus-network
+    && ln -sf $HOME/.nexus/bin/nexus-network /usr/local/bin/nexus-network
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
@@ -67,7 +67,7 @@ EOF
 #!/bin/bash
 set -e
 
-PROVER_ID_FILE="/root/.nexus/node-id"
+PROVER_ID_FILE="$HOME/.nexus/node-id"
 
 if [ -z "\$NODE_ID" ]; then
     echo "错误：未设置 NODE_ID 环境变量"
@@ -85,21 +85,21 @@ fi
 screen -S nexus -X quit >/dev/null 2>&1 || true
 
 echo "启动 nexus-network 节点..."
-screen -dmS nexus bash -c "nexus-network start --node-id \$NODE_ID &>> /root/nexus.log"
+screen -dmS nexus bash -c "nexus-network start --node-id \$NODE_ID &>> $HOME/nexus.log"
 
 sleep 3
 
 if screen -list | grep -q "nexus"; then
     echo "节点已在后台启动。"
-    echo "日志文件：/root/nexus.log"
+    echo "日志文件：$HOME/nexus.log"
     echo "可以使用 docker logs \$CONTAINER_NAME 查看日志"
 else
     echo "节点启动失败，请检查日志。"
-    cat /root/nexus.log
+    cat $HOME/nexus.log
     exit 1
 fi
 
-tail -f /root/nexus.log
+tail -f $HOME/nexus.log
 EOF
 
     docker build -t "$IMAGE_NAME" .
@@ -128,7 +128,7 @@ function run_container() {
         chmod 644 "$log_file"
     fi
 
-    docker run -d --name "$container_name" -v "$log_file":/root/nexus.log -e NODE_ID="$node_id" "$IMAGE_NAME"
+    docker run -d --name "$container_name" -v "$log_file":$HOME/nexus.log -e NODE_ID="$node_id" "$IMAGE_NAME"
     echo "容器 $container_name 已启动！"
 }
 
@@ -407,7 +407,7 @@ function setup_default_auto_cleanup() {
     # check_node_pm2 会在 batch_rotate_nodes 中被调用，这里可以省略
     
     # 创建清理脚本
-    local script_dir="/root/nexus_scripts"
+    local script_dir="$HOME/nexus_scripts"
     mkdir -p "$script_dir"
     
     cat > "$script_dir/cleanup_logs.sh" <<EOF
@@ -495,7 +495,7 @@ function batch_rotate_nodes() {
     build_image
 
     # 创建启动脚本目录
-    local script_dir="/root/nexus_scripts"
+    local script_dir="$HOME/nexus_scripts"
     mkdir -p "$script_dir"
 
     # 为每组创建启动脚本
@@ -537,7 +537,7 @@ EOF
 
         # 添加到对应组的启动脚本
         echo "echo \"[$(date '+%Y-%m-%d %H:%M:%S')] 启动节点 $node_id ...\"" >> "$script_dir/start_group${group_num}.sh"
-        echo "docker run -d --name $container_name -v $log_file:/root/nexus.log -e NODE_ID=$node_id $IMAGE_NAME" >> "$script_dir/start_group${group_num}.sh"
+        echo "docker run -d --name $container_name -v $log_file:$HOME/nexus.log -e NODE_ID=$node_id $IMAGE_NAME" >> "$script_dir/start_group${group_num}.sh"
         echo "sleep 30" >> "$script_dir/start_group${group_num}.sh"
     done
 
